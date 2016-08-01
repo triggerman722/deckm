@@ -29,6 +29,10 @@ package com.deckmotion;
  * redistribute the Software for such purposes.
  */
 
+
+
+import com.sun.media.codec.video.colorspace.JavaRGBToYUV;
+
 import java.awt.Dimension;
 import java.io.File;
 import java.io.IOException;
@@ -42,18 +46,28 @@ import javax.media.datasink.DataSinkErrorEvent;
 import javax.media.datasink.DataSinkEvent;
 import javax.media.datasink.DataSinkListener;
 import javax.media.datasink.EndOfStreamEvent;
+import javax.media.format.JPEGFormat;
+import javax.media.format.RGBFormat;
 import javax.media.format.VideoFormat;
+import javax.media.format.YUVFormat;
 import javax.media.protocol.ContentDescriptor;
 import javax.media.protocol.DataSource;
 import javax.media.protocol.FileTypeDescriptor;
 import javax.media.protocol.PullBufferDataSource;
 import javax.media.protocol.PullBufferStream;
 
+
+
 /**
  * This program takes a list of JPEG image files and convert them into a
  * QuickTime movie.
  */
+
+
 public class JpegImagesToMovie implements ControllerListener, DataSinkListener {
+
+    private static final String inputformat = VideoFormat.YUV;
+    private static final String outputformat = VideoFormat.JPEG;
 
     public boolean doIt(int width, int height, int frameRate, Vector inFiles,
                         MediaLocator outML) throws MalformedURLException {
@@ -85,6 +99,8 @@ public class JpegImagesToMovie implements ControllerListener, DataSinkListener {
         // Set the output content descriptor to QuickTime.
         p.setContentDescriptor(new ContentDescriptor(
                 FileTypeDescriptor.QUICKTIME));
+
+
 
         // Query for the processor for supported formats.
         // Then set it on the processor.
@@ -148,6 +164,8 @@ public class JpegImagesToMovie implements ControllerListener, DataSinkListener {
     }
     public void mergeFiles(MediaLocator oml, File realAudioFile) {
         try {
+            //Registry.registerYUVHandler();
+
             DataSource videoDataSource = javax.media.Manager.createDataSource(oml.getURL()); //your video file
             DataSource audioDataSource = javax.media.Manager.createDataSource(realAudioFile.toURI().toURL()); // your audio file
             DataSource mixedDataSource = null; // data source to combine video with audio
@@ -156,33 +174,67 @@ public class JpegImagesToMovie implements ControllerListener, DataSinkListener {
 
             DataSink outputDataSink = null; // datasink for output file
 
-            MediaLocator videoLocator = new MediaLocator(oml.getURL()); //media locator for video
-            MediaLocator audioLocator = new MediaLocator(realAudioFile.toURI().toURL()); //media locator for audio
-
             FileTypeDescriptor outputType = new FileTypeDescriptor(FileTypeDescriptor.QUICKTIME); //output video format type
 
             Format outputFormat[] = new Format[2]; //format array
-            VideoFormat videoFormat = new VideoFormat(VideoFormat.JPEG); // output video codec MPEG does not work on windows
+
+
             javax.media.format.AudioFormat audioMediaFormat = new javax.media.format.AudioFormat(
                     javax.media.format.AudioFormat.LINEAR, 44100, 16, 1); //audio format
 
 
-            outputFormat[0] = videoFormat;
+            outputFormat[0] = new VideoFormat(VideoFormat.CINEPAK);//new H264Format(new Dimension(176, 144), 38016, 15);
             outputFormat[1] = audioMediaFormat;
 
-            //create processors for each file
+
+
+
+
             Processor videoProcessor = Manager.createProcessor(videoDataSource);
+
             Processor audioProcessor = Manager.createProcessor(audioDataSource);
 
+
             Processor processor = null;
+
+            videoProcessor.configure();
+
+            //wait till configured
+            while(videoProcessor.getState() < 180) {
+                Thread.sleep(20);
+            }
+
+            /*Codec jencoder  = (Codec) new JavaRGBToYUV();
+            Codec[] codec = {jencoder};
+            TrackControl[] tc = videoProcessor.getTrackControls();
+            for (TrackControl t : tc) {
+                if (t.getFormat() instanceof VideoFormat) {
+                    t.setCodecChain(codec);
+                }
+            }*/
+
+           /* Codec encoder = (Codec) new H264Encoder();
+
+            Codec[] codec = {encoder};
+            TrackControl[] tc = videoProcessor.getTrackControls();
+            for (TrackControl t : tc) {
+                if (t.getFormat() instanceof VideoFormat) {
+                    t.setCodecChain(codec);
+                }
+            }*/
+            //videoProcessor.setContentDescriptor(new ContentDescriptor("video.264"));
+
 
             //start video and audio processors
             videoProcessor.realize();
             audioProcessor.realize();
             //wait till they are realized
-            while(videoProcessor.getState() != 300 && audioProcessor.getState() != 300) {
-                Thread.sleep(100);
+            while(videoProcessor.getState() < 300 && audioProcessor.getState() < 300) {
+                System.out.println("Video State: " + videoProcessor.getState());
+                System.out.println("Audio State: " + audioProcessor.getState());
+                Thread.sleep(30);
             }
+            System.out.println(videoProcessor.getState());
             //get processors dataoutputs to merge
             arrayDataSource[0] = videoProcessor.getDataOutput();
             arrayDataSource[1] = audioProcessor.getDataOutput();
@@ -211,6 +263,8 @@ public class JpegImagesToMovie implements ControllerListener, DataSinkListener {
             Format f[] = tcs[0].getSupportedFormats();
 
             tcs[0].setFormat(f[0]);
+            //Codec encoder = new H263Decoder()
+            //tcs[0].setCodecChain();
 
             processor.realize();
             //wait till realized
@@ -239,7 +293,10 @@ public class JpegImagesToMovie implements ControllerListener, DataSinkListener {
             //processor.close();
             processor.removeControllerListener(this);
 
-        } catch (NoDataSourceException | IOException e) {
+        } catch (NoDataSourceException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        } catch (IOException e) {
             // TODO Auto-generated catch block
             e.printStackTrace();
         } catch (IncompatibleSourceException e) {
@@ -260,6 +317,78 @@ public class JpegImagesToMovie implements ControllerListener, DataSinkListener {
         }
 
     }
+    public void convertH264() throws ResourceUnavailableException {
+
+    }
+
+    public void convertToYUL(MediaLocator oml) {
+
+        //start with a datasource
+        DataSource videoDataSource = null; //your video file
+        try {
+            videoDataSource = Manager.createDataSource(oml.getURL());
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (NoDataSourceException e) {
+            e.printStackTrace();
+        }
+        //then a datasource
+        Processor videoProcessor = null;
+        try {
+            videoProcessor = Manager.createProcessor(videoDataSource);
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (NoProcessorException e) {
+            e.printStackTrace();
+        }
+        //do the whole configure BS routine - FYI this is pure narcism (read:unneccessary)
+        videoProcessor.configure();
+
+        //wait till configured
+        while(videoProcessor.getState() < 180) {
+            try {
+                Thread.sleep(20);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+        Codec jencoder  = (Codec) new JavaRGBToYUV();
+            Codec[] codec = {jencoder};
+            TrackControl[] tc = videoProcessor.getTrackControls();
+            for (TrackControl t : tc) {
+                if (t.getFormat() instanceof VideoFormat) {
+                    try {
+                        t.setCodecChain(codec);
+                    } catch (UnsupportedPlugInException e) {
+                        e.printStackTrace();
+                    }
+                }
+        }
+
+        videoProcessor.realize();
+        videoProcessor.start();
+        DataSource outputDataSource = videoProcessor.getDataOutput();
+        MediaLocator outputLocator = new MediaLocator("file:/home/greg/Projects/deckmotion/merged2.mp4");
+        DataSink outputDataSink = null;
+        try {
+            outputDataSink = Manager.createDataSink(outputDataSource, outputLocator);
+        } catch (NoDataSinkException e) {
+            e.printStackTrace();
+        }
+        try {
+            outputDataSink.open();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        outputDataSink.addDataSinkListener(this);
+        try {
+            outputDataSink.start();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
 
     /**
      * Create the DataSink.
@@ -364,84 +493,6 @@ public class JpegImagesToMovie implements ControllerListener, DataSinkListener {
                 waitFileSync.notifyAll();
             }
         }
-    }
-
-    /*public static void main(String args[]) {
-
-        if (args.length == 0)
-            prUsage();
-
-        // Parse the arguments.
-        int i = 0;
-        int width = -1, height = -1, frameRate = 1;
-        Vector inputFiles = new Vector();
-        String outputURL = null;
-
-        while (i < args.length) {
-
-            if (args[i].equals("-w")) {
-                i++;
-                if (i >= args.length)
-                    prUsage();
-                width = new Integer(args[i]).intValue();
-            } else if (args[i].equals("-h")) {
-                i++;
-                if (i >= args.length)
-                    prUsage();
-                height = new Integer(args[i]).intValue();
-            } else if (args[i].equals("-f")) {
-                i++;
-                if (i >= args.length)
-                    prUsage();
-                frameRate = new Integer(args[i]).intValue();
-            } else if (args[i].equals("-o")) {
-                i++;
-                if (i >= args.length)
-                    prUsage();
-                outputURL = args[i];
-            } else {
-                inputFiles.addElement(args[i]);
-            }
-            i++;
-        }
-
-        if (outputURL == null || inputFiles.size() == 0)
-            prUsage();
-
-        // Check for output file extension.
-        if (!outputURL.endsWith(".mov") && !outputURL.endsWith(".MOV")) {
-            System.err
-                    .println("The output file extension should end with a .mov extension");
-            prUsage();
-        }
-
-        if (width < 0 || height < 0) {
-            System.err.println("Please specify the correct image size.");
-            prUsage();
-        }
-
-        // Check the frame rate.
-        if (frameRate < 1)
-            frameRate = 1;
-
-        // Generate the output media locators.
-        MediaLocator oml;
-
-        if ((oml = createMediaLocator(outputURL)) == null) {
-            System.err.println("Cannot build media locator from: " + outputURL);
-            System.exit(0);
-        }
-
-        JpegImagesToMovie imageToMovie = new JpegImagesToMovie();
-        imageToMovie.doIt(width, height, frameRate, inputFiles, oml);
-
-        System.exit(0);
-    }*/
-
-    static void prUsage() {
-        System.err
-                .println("Usage: java JpegImagesToMovie -w <width> -h <height> -f <frame rate> -o <output URL> <input JPEG file 1> <input JPEG file 2> ...");
-        System.exit(-1);
     }
 
     /**
@@ -554,9 +605,27 @@ public class JpegImagesToMovie implements ControllerListener, DataSinkListener {
             this.height = height;
             this.images = images;
 
-            format = new VideoFormat(VideoFormat.JPEG, new Dimension(width,
+            format = new VideoFormat(inputformat, new Dimension(width,
+                    height), Format.NOT_SPECIFIED, Format.byteArray,
+                                (float) frameRate);
+
+            format = new RGBFormat();
+
+            format = new YUVFormat(YUVFormat.YUV_420);
+
+            format  = new JPEGFormat(new Dimension(width, height),
+                    Format.NOT_SPECIFIED,
+                    Format.byteArray,
+                    (float)frameRate,
+                    75,
+                    JPEGFormat.DEC_420);
+
+            format = new VideoFormat(VideoFormat.CINEPAK, new Dimension(width,
                     height), Format.NOT_SPECIFIED, Format.byteArray,
                     (float) frameRate);
+
+
+            //format = new YUVFormat(new Dimension(width, height), Format.NOT_SPECIFIED, Format.byteArray, (float) frameRate, YUVFormat.YUV_420, 0,0,0,0,0);
         }
 
         /**

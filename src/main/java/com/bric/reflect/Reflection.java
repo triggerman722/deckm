@@ -125,9 +125,14 @@ public class Reflection {
 			try {
 				Class<?> t = Class.forName(className);
 				return construct(t, arguments);
-			} catch(ClassNotFoundException | SecurityException | IllegalArgumentException e) {
+			} catch(ClassNotFoundException e) {
+				throw new RuntimeException("An error occurred parsing \""+input+"\" as a field.", e);
+			} catch (SecurityException e) {
+				throw new RuntimeException("An error occurred parsing \""+input+"\" as a field.", e);
+			} catch (IllegalArgumentException e) {
 				throw new RuntimeException("An error occurred parsing \""+input+"\" as a field.", e);
 			}
+
 		} else if(methodPattern.matcher(string).matches()) {
 			int i1 = string.indexOf('(');
 			int i2 = string.lastIndexOf(')');
@@ -174,7 +179,15 @@ public class Reflection {
 						return m[a].invoke(obj, parseCommaSeparatedList(arguments));
 					}
 				}
-			} catch(SecurityException | IllegalArgumentException | IllegalAccessException | InvocationTargetException | NoSuchFieldException e) {
+			} catch(SecurityException  e) {
+				throw new RuntimeException("An error occurred parsing \""+input+"\" as a method.", e);
+			} catch(IllegalArgumentException e) {
+				throw new RuntimeException("An error occurred parsing \""+input+"\" as a method.", e);
+			} catch(IllegalAccessException e) {
+				throw new RuntimeException("An error occurred parsing \""+input+"\" as a method.", e);
+			} catch(InvocationTargetException e) {
+				throw new RuntimeException("An error occurred parsing \""+input+"\" as a method.", e);
+			} catch(NoSuchFieldException e) {
 				throw new RuntimeException("An error occurred parsing \""+input+"\" as a method.", e);
 			}
 			throw new RuntimeException("Unrecognized method for "+input+"\"");
@@ -387,7 +400,7 @@ public class Reflection {
 	 */
 	public static String nameStaticField(Class<?> c,Object value) {
 		Field[] f = c.getDeclaredFields();
-		List<Field> v = new ArrayList<>();
+		List<Field> v = new ArrayList<Field>();
 		for(int a = 0; a<f.length; a++) {
 			if((f[a].getModifiers() & Modifier.STATIC)>0) {
 				try {
